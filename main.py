@@ -1,8 +1,10 @@
+#TTD:
+#clean the code and make it more comprehensible
 from flask import Flask, request, render_template, json
 import cbpro as cb
 import pandas as pd
 import numpy as np
-import datetime as dt
+import datetime
 
 from sklearn.metrics import classification_report, r2_score
 from sklearn.model_selection import train_test_split
@@ -126,7 +128,7 @@ class Compute_statistics(GetData):
         s = np.sqrt(np.sum((model.predict(x_train)-y_train)**2)/(y_train.shape[0]-x_train.shape[1]-1))
         low, high = result - 1.96*s, result + 1.96*s
 
-        return result, low, high
+        return prev_price, result, low, high
 
     def logit_reg(self):
         """Logistic regression prediction"""
@@ -157,6 +159,25 @@ def fetch_pairs():
     products_df = list(pd.DataFrame(c.get_products())['id'])
     products_df.sort()
     return products_df 
+
+def round_time(dt=None, date_delta=datetime.timedelta(minutes=1), to='average'):
+    round_to = date_delta.total_seconds()
+    if dt is None:
+        dt = datetime.now()
+    seconds = (dt - dt.min).seconds
+
+    if seconds % round_to == 0 and dt.microsecond == 0:
+        rounding = (seconds + round_to / 2) // round_to * round_to
+    else:
+        if to == 'up':
+            # // is a floor division, not a comment on following line (like in javascript):
+            rounding = (seconds + dt.microsecond/1000000 + round_to) // round_to * round_to
+        elif to == 'down':
+            rounding = seconds // round_to * round_to
+        else:
+            rounding = (seconds + round_to / 2) // round_to * round_to
+
+    return dt + datetime.timedelta(0, rounding - seconds, - dt.microsecond)
 
 @app.route('/', methods=['GET','POST'])
 def index():
@@ -201,28 +222,33 @@ def index():
                 addminutes = 15
                 gran = 900
             elif input_time == "1 hour":
-                addminutes = 60
+                addminutes = 1
                 gran = 3600
             elif input_time == "6 hours":
-                addminutes = 360
+                addminutes = 6
                 gran = 21600
             elif input_time == "24 hours":
-                addminutes = 1440
+                addminutes = 24
                 gran = 86400
 
-            utc = dt.datetime.now(dt.timezone.utc)
-            utcplus = utc + dt.timedelta(minutes=addminutes)
+            utc = datetime.datetime.utcnow()
+            if gran <= 900:
+                utcplus = round_time(utc, date_delta=datetime.timedelta(minutes=addminutes), to="up")
+                utcminus = round_time(utc, date_delta=datetime.timedelta(minutes=addminutes), to="down")
+            else:
+                utcplus = round_time(utc, date_delta=datetime.timedelta(hours=addminutes), to="up")
+                utcminus = round_time(utc, date_delta=datetime.timedelta(hours=addminutes), to="down")
             utc_times = []
-            utc_times.append(f'{utc.day}/{utc.month}/{utc.year}')
-            utc_times.append(utc.strftime('%H:%M:%S'))
+            utc_times.append(f'{utcminus.day}/{utcminus.month}/{utcminus.year}')
+            utc_times.append(utcminus.strftime('%H:%M:%S'))
             utc_times.append(utcplus.strftime('%H:%M:%S'))
             currencies = input_pair.split("-")
 
             model = Compute_statistics(product_id=input_pair,gra=gran)
             direction,accuracy = model.logit_reg()
-            value, low, high = model.ln_reg()
+            previous, value, low, high = model.ln_reg()
             output =    [direction,'{:.2%}'.format(accuracy),'{:.2f}'.format(value),
-                        '{:.2f}'.format(low), '{:.2f}'.format(high)]
+                        '{:.2f}'.format(low), '{:.2f}'.format(high), '{:.2f}'.format(previous)]
 
             return render_template('results.html',
                                     utcs = utc_times,
@@ -239,19 +265,24 @@ def index():
             addminutes = request.form.get('refresh3', type = int)
             gran = request.form.get('refresh4', type = int)
 
-            utc = dt.datetime.now(dt.timezone.utc)
-            utcplus = utc + dt.timedelta(minutes=addminutes)
+            utc = datetime.datetime.utcnow()
+            if gran <= 900:
+                utcplus = round_time(utc, date_delta=datetime.timedelta(minutes=addminutes), to="up")
+                utcminus = round_time(utc, date_delta=datetime.timedelta(minutes=addminutes), to="down")
+            else:
+                utcplus = round_time(utc, date_delta=datetime.timedelta(hours=addminutes), to="up")
+                utcminus = round_time(utc, date_delta=datetime.timedelta(hours=addminutes), to="down")
             utc_times = []
-            utc_times.append(f'{utc.day}/{utc.month}/{utc.year}')
-            utc_times.append(utc.strftime('%H:%M:%S'))
+            utc_times.append(f'{utcminus.day}/{utcminus.month}/{utcminus.year}')
+            utc_times.append(utcminus.strftime('%H:%M:%S'))
             utc_times.append(utcplus.strftime('%H:%M:%S'))
             currencies = input_pair.split("-")
 
             model = Compute_statistics(product_id=input_pair,gra=gran)
             direction,accuracy = model.logit_reg()
-            value, low, high = model.ln_reg()
+            previous, value, low, high = model.ln_reg()
             output =    [direction,'{:.2%}'.format(accuracy),'{:.2f}'.format(value),
-                        '{:.2f}'.format(low), '{:.2f}'.format(high)]
+                        '{:.2f}'.format(low), '{:.2f}'.format(high), '{:.2f}'.format(previous)]
 
             return render_template('results.html',
                                     utcs = utc_times,
