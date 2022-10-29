@@ -1,61 +1,43 @@
-# make all the imports
-
+from flask import Flask, request, render_template, json
 import cbpro as cb
-from cbpro.public_client import PublicClient
-from matplotlib.streamplot import InvalidIndexError
-import numpy as np
-import numpy.random as npr
 import pandas as pd
+import numpy as np
 import datetime as dt
 
 from sklearn.metrics import classification_report, r2_score
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression, LogisticRegression
-
-import talib as ta
-import matplotlib.pyplot as plt
-
-import warnings
-warnings.filterwarnings('ignore')
-
 import statsmodels.api as sm
+
+app = Flask(__name__)
 
 class GetData:
     # """
     # Perform preprocessing on the selected cryptocurrency ticker
     # """
-    def __init__(self, product_id) -> None:
-        """
-        product_id(str): The cryptocurrency ticker e.g. BTC-EUR
-        before(datetime or str): Start time for data e.g. '2022-10-5 12:00:00' 
-        after(datetime or str): End time for data e.g. datetime.datetime.now()
-        """
-        self.__pub = PublicClient() # initialize the coinbase client
+    def __init__(self, product_id, gra) -> None:
+        self.__pub = cb.PublicClient() # initialize the coinbase client
         self.product_id = product_id
-
+        self.gra = gra
 
     # get historic data      
     def historical_rates(self):
         "return historical data in float formats"
         historic_rates = pd.DataFrame(
-                        self.__pub.get_product_historic_rates(product_id=self.product_id),
+                        self.__pub.get_product_historic_rates(product_id=self.product_id,granularity=self.gra),
                         columns=['time','low','high','open','close','volume'])
         
         return historic_rates.astype('float')
-
 
     def __repr__(self):
         return f"{self.historical_rates()}"
 
 class Compute_statistics(GetData):
-    """
-    computes the statistics of the data
-    """
 
-    def __init__(self, product_id) -> None:
-        super().__init__(product_id)
+    def __init__(self, product_id, gra) -> None:
+        # super().__init__(product_id, gra)
 
-        self._historical_rates = GetData('BTC-EUR').historical_rates()
+        self._historical_rates = GetData(product_id, gra).historical_rates()
         self._x = self._historical_rates.drop(columns=['close'])
         self._y = self._historical_rates.close
         # smooth data
@@ -73,17 +55,18 @@ class Compute_statistics(GetData):
 
     def smooth_data(self, data):
         data = data.copy()
+        timeperiod = 14
         try:
             d = data.shape[1] # used to select the train data 
             data = data[::-1]
             index = data.columns
             new_data = pd.DataFrame()
             for i in range(d):
-                new_data[index[i]] = ta.EMA(data.iloc[:,i], timeperiod=14)
+                new_data[index[i]] = data.iloc[:,i].ewm(span=timeperiod, adjust=False).mean()[timeperiod-1:]
             return new_data.dropna()[::-1]
         except IndexError:
             data = data[::-1]
-            return ta.EMA(data, timeperiod=14).dropna()[::-1]
+            return data.ewm(span=timeperiod, adjust=False).mean()[timeperiod-1:][::-1]
 
     def __change_calculator(self, data):
         """data is a pandas df."""
@@ -93,7 +76,6 @@ class Compute_statistics(GetData):
             return data[1:].diff(periods=1).dropna().reset_index(drop=True)
         except IndexError:
             return data[:-1].diff(periods=1).dropna().reset_index(drop=True)
-
     
     def __standardizer(self, data):
         """
@@ -108,13 +90,6 @@ class Compute_statistics(GetData):
             return x
         except IndexError:
             return (x - x.min()) / (x.max() - x.min())
-    
-    # correlation coefficient
-    def __corrcoeffs(self):
-        """Correlation coefficient of dataset"""
-        d = self._standardize_x.shape[1]
-        return [np.corrcoef(self._standardize_x[:,i], self._standardize_y)[0,1] for i in range(d)]
-
 
     # only variables with p-value less than 0.05
     def __significant_vars(self):
@@ -145,18 +120,20 @@ class Compute_statistics(GetData):
         model.fit(x_train, y_train)
         y_pred = model.predict(x_test)
         report = r2_score(y_test, y_pred)
-        result = ys_test.iloc[1] + y_pred[0]
-        real_data = ys_test.iloc[0]
+        result = ys_test.iloc[1] - y_pred[0]
+        prev_price = ys_test.iloc[1]
 
-        #return type(y_test)
-        return result, real_data
-        return report
+        s = np.sqrt(np.sum((model.predict(x_train)-y_train)**2)/(y_train.shape[0]-x_train.shape[1]-1))
+        low, high = result - 1.96*s, result + 1.96*s
+
+        return result, low, high
 
     def logit_reg(self):
         """Logistic regression prediction"""
-        y = self._ychange
+        y = self._ychange.copy()
         y[y <= 0] = 0
         y[y > 0] = 1
+        y = 1-y
 
         x_train, x_test, y_train, y_test =\
             train_test_split(self._final_x[::-1], y[::-1], test_size=0.2, shuffle=False)    
@@ -170,36 +147,131 @@ class Compute_statistics(GetData):
         model.fit(x_train, y_train)
         y_pred = model.predict(x_test)
         report = classification_report(y_test, y_pred)
-        result = y_pred[:10]
-        real_data = y_test[:10]
+        result = y_pred[0]
+        real_data = y_test[0]
 
-        #return report
-        return result, real_data
-    
-    def __repr__(self):
-        # return f"{self._smooth_y}"
-        #return f"{self._standardize_y}, {self._standardize_x}"
-        # return f"{self.__significant_vars()}"
-        #return f"{self._xchange}, {self._ychange}"
+        return result,(y_pred[1:]==y_test[1:]).mean()
+
+def fetch_pairs():
+    c = cb.PublicClient()
+    products_df = list(pd.DataFrame(c.get_products())['id'])
+    products_df.sort()
+    return products_df 
+
+@app.route('/', methods=['GET','POST'])
+def index():
+    approved_pairs = ["BTC-EUR", "BTC-GBP", "BTC-USD", "BTC-USDC",
+                    "BTC-USDT", "WBTC-USD", "CBETH-USD", "ETH-DAI",
+                    "ETH-EUR", "ETH-GBP", "ETH-USD", "ETH-USDC",
+                    "ETH-USDT", "MKR-USD"]
+
+    if request.method == 'POST':
+        if "different1" in request.form:
+            input_pair = request.form.get('different1')
+            input_time = request.form.get('different2')
+            invalid_pair = False
+
+            return render_template('home.html', 
+                                    products=fetch_pairs(),
+                                    aproducts = approved_pairs,
+                                    ipair = input_pair,
+                                    itime = input_time,
+                                    bpair = json.dumps(invalid_pair))
         
-        #return f"{self._x['time']}, \n {self._xchange.time}"
-        # return f'''Linear regression: {self.ln_reg()}'''
-        return f'''Logistic regression: {self.logit_reg()}'''
+        if "run" in request.form:
+            invalid_pair = False
+            input_pair = request.form.get('currency-pairs')
+            input_time = request.form.get('times')
+            if input_pair == "None":
+                invalid_pair = True
+                return render_template('home.html', 
+                                        products = fetch_pairs(),
+                                        aproducts = approved_pairs,
+                                        ipair = input_pair,
+                                        itime = input_time,
+                                        bpair = json.dumps(invalid_pair))
 
-class ApplicationInterface:
-    # OSKARI'S SECTION !
-    # call currency pair and make predictions
-    def visualization(self):
-        data = self.compute_stats()
-        plt.scatter(data.time_change, data.price_change)
-        plt.show()
-        pass
+            if input_time == "1 minute":
+                addminutes = 1
+                gran = 60
+            elif input_time == "5 minutes":
+                addminutes = 5
+                gran = 300
+            elif input_time == "15 minutes":
+                addminutes = 15
+                gran = 900
+            elif input_time == "1 hour":
+                addminutes = 60
+                gran = 3600
+            elif input_time == "6 hours":
+                addminutes = 360
+                gran = 21600
+            elif input_time == "24 hours":
+                addminutes = 1440
+                gran = 86400
 
+            utc = dt.datetime.now(dt.timezone.utc)
+            utcplus = utc + dt.timedelta(minutes=addminutes)
+            utc_times = []
+            utc_times.append(f'{utc.day}/{utc.month}/{utc.year}')
+            utc_times.append(utc.strftime('%H:%M:%S'))
+            utc_times.append(utcplus.strftime('%H:%M:%S'))
+            currencies = input_pair.split("-")
 
-if __name__ == '__main__':
-    # test the predictor class
-    data = GetData(product_id='BTC-EUR')
-    #print(data)
-    stats = Compute_statistics(product_id='BTC-EUR')
-    print(stats)
+            model = Compute_statistics(product_id=input_pair,gra=gran)
+            direction,accuracy = model.logit_reg()
+            value, low, high = model.ln_reg()
+            output =    [direction,'{:.2%}'.format(accuracy),'{:.2f}'.format(value),
+                        '{:.2f}'.format(low), '{:.2f}'.format(high)]
 
+            return render_template('results.html',
+                                    utcs = utc_times,
+                                    currency_list = currencies,
+                                    output_list = output,
+                                    pair = input_pair,
+                                    time = input_time,
+                                    add = addminutes,
+                                    gra = gran)
+        
+        if "refresh1" in request.form:
+            input_pair = request.form.get('refresh1')
+            input_time = request.form.get('refresh2')
+            addminutes = request.form.get('refresh3', type = int)
+            gran = request.form.get('refresh4', type = int)
+
+            utc = dt.datetime.now(dt.timezone.utc)
+            utcplus = utc + dt.timedelta(minutes=addminutes)
+            utc_times = []
+            utc_times.append(f'{utc.day}/{utc.month}/{utc.year}')
+            utc_times.append(utc.strftime('%H:%M:%S'))
+            utc_times.append(utcplus.strftime('%H:%M:%S'))
+            currencies = input_pair.split("-")
+
+            model = Compute_statistics(product_id=input_pair,gra=gran)
+            direction,accuracy = model.logit_reg()
+            value, low, high = model.ln_reg()
+            output =    [direction,'{:.2%}'.format(accuracy),'{:.2f}'.format(value),
+                        '{:.2f}'.format(low), '{:.2f}'.format(high)]
+
+            return render_template('results.html',
+                                    utcs = utc_times,
+                                    currency_list = currencies,
+                                    output_list = output,
+                                    pair = input_pair,
+                                    time = input_time,
+                                    add = addminutes,
+                                    gra = gran)
+    
+    input_pair = json.dumps(None)
+    input_time = json.dumps(None)
+    invalid_pair = False
+
+    return render_template('home.html', 
+                            products=fetch_pairs(),
+                            aproducts = approved_pairs,
+                            ipair = input_pair,
+                            itime = input_time,
+                            bpair = json.dumps(invalid_pair))
+
+if __name__ == "__main__":
+    app.run(port=8080, debug=True)
