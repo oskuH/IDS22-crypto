@@ -1,0 +1,85 @@
+html    {
+    background-color: rgb(250, 238, 169);
+    font-family: Arial, Helvetica, sans-serif;
+    text-align: center;
+}
+
+body    {
+    margin: 0;
+    padding: 0;
+}
+
+.headers  {
+    position: absolute;
+    left: 49%;
+    transform: translate(-49%);
+    top: 0;
+    background-color: rgb(255, 217, 0);
+    height: 127px;
+    width: 100%;
+}
+
+.output {margin-top: 301px;}
+
+.container  {
+    position: relative;
+    background-color: rgb(201, 201, 201);
+    padding-top: 8px;
+    height: 142px;
+}
+
+.prediction-title   {
+    margin-bottom: 5px;
+    font-size: 15px;
+}
+
+.stronger   {
+    font-size: 20px;
+    color: rgb(0, 95, 0);
+}
+
+.weaker     {
+    font-size: 20px;
+    color: rgb(156, 0, 0);
+}
+
+.ema    {font-size: 20px;}
+
+.button1 {
+    margin-top: 15px;
+    border-radius: 12px;
+    background-color: rgb(255,217,0);
+    padding: 8px 17px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.button2 {
+    margin-top: 30px;
+    border-radius: 12px;
+    background-color: rgb(255,217,0);
+    padding: 8px 17px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+.button1:hover {background-color: rgb(230, 195, 0);}
+.button2:hover {background-color: rgb(230, 195, 0);}
+
+.disclaimer {
+    position: absolute;
+    left: 49%;
+    transform: translate(-49%);
+    bottom: 0;
+    margin: 0 auto;
+    background-color: rgb(44, 44, 44);
+    width: 100%;
+    color: rgb(211, 211, 211);
+}
