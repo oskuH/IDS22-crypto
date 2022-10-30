@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+    <link type="text/css" rel="stylesheet" href="{{ url_for('static', filename='css/resultsstyle.css') }}" />
+    <title>Crypto Cracker Results</title>
+
+    <script
+      src="https://code.jquery.com/jquery-3.6.0.min.js"
+      integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4="
+      crossorigin="anonymous"
+    ></script>
+
+    <script>
+      var jsonlist = '{{utcs | tojson}}'
+      var times = JSON.parse(jsonlist)
+      var pair_input = '{{pair}}'
+      var time_input = '{{time}}'
+      var addminutes_input = '{{add}}'
+      var granularity_input = '{{gra}}'
+      var jsonlist2 = '{{currency_list | tojson}}'
+      var currencies = JSON.parse(jsonlist2)
+      var jsonlist3 = '{{output_list | tojson}}'
+      var output = JSON.parse(jsonlist3)
+
+      function myFunction() {
+        document.getElementById("pair_input").innerHTML = pair_input
+        document.getElementById("i_date").innerHTML = times[0]
+        document.getElementById("i_time1").innerHTML = times[1]
+        document.getElementById("i_time2").innerHTML = times[1]
+        document.getElementById("previous").innerHTML = output[5]
+        document.getElementById("currency21").innerHTML = currencies[1]
+        document.getElementById("p_time").innerHTML = times[2]
+        document.getElementById("currency1").innerHTML = currencies[0]
+        document.getElementById("d_accuracy").innerHTML = output[1]
+        document.getElementById("ma_prediction").innerHTML = output[2]
+        document.getElementById("low").innerHTML = output[3]
+        document.getElementById("high").innerHTML = output[4]
+        document.getElementById("currency22").innerHTML = currencies[1]
+        if (output[0] === 1.0) {
+          document.getElementById("d_prediction").innerHTML = "STRONGER"
+          document.getElementById("d_prediction").className = "stronger"
+        } else  {
+          document.getElementById("d_prediction").innerHTML = "WEAKER"
+          document.getElementById("d_prediction").className = "weaker"
+        }
+        document.getElementById("refresh1").value = pair_input
+        document.getElementById("refresh2").value = time_input
+        document.getElementById("refresh3").value = addminutes_input
+        document.getElementById("refresh4").value = granularity_input
+        document.getElementById("different1").value = pair_input
+        document.getElementById("different2").value = time_input
+      }
+    </script>
+
+</head>
+
+<body onload="myFunction()">
+
+  <div class="headers">
+    <h1>Crypto Cracker</h1>
+    <h3>fast crypto price predictions</h3>
+  </div>
+
+  <div class="output">
+    <p class="prediction-title"><span id="pair_input"></span> price prediction on the <span id="i_date"></span> at <span id="i_time1"></span> UTC</p>
+    <div class="container">
+      <p>EMA(14) at <span id="i_time2"></span> UTC: <span id="previous" class="ema"></span> <span id="currency21" class="ema"></span></p>
+      <p>At <span id="p_time"></span> UTC, <span id="currency1"></span> will be <span id="d_prediction"></span> with <span id="d_accuracy"></span> certainty.</p>
+      <p>Predicted EMA(14): <span id="ma_prediction" class="ema"></span> <span id="currency22" class="ema"></span> with [<span id="low"></span>, <span id="high"></span>] 95% CI</p>
+    </div>
+
+    <form action="{{ url_for('index')}}" method="POST">
+      <input type="hidden" id="refresh1" name="refresh1">
+      <input type="hidden" id="refresh2" name="refresh2">
+      <input type="hidden" id="refresh3" name="refresh3">
+      <input type="hidden" id="refresh4" name="refresh4">
+      <input type="submit" class="button1" name="refreshb" value="Refresh prediction">
+    </form>
+
+    <form action="{{ url_for('index')}}" method="POST">
+      <input type="hidden" id="different1" name="different1">
+      <input type="hidden" id="different2" name="different2">
+      <input type="submit" class="button2" name="differentb" value="Run with different parametres">
+    </form>
+
+  </div>
+
+  <div class="disclaimer">
+    <p>Crypto Cracker was developed as a course project by three science students from the University of Helsinki.</p>
+    <p>The prediction algorithm uses historical data from Coinbase Pro API.</p>
+  </div>
+
+</body>
+
+</html>

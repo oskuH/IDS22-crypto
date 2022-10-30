@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+    <link type="text/css" rel="stylesheet" href="{{ url_for('static', filename='css/homestyle.css') }}" />
+    <title>Crypto Cracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+    <script
+      src="https://code.jquery.com/jquery-3.6.0.min.js"
+      integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4="
+      crossorigin="anonymous"
+    ></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script type="text/javascript">
+    $(document).ready(function() {
+        $('.single').select2();
+    });
+    </script>
+    <script>
+    var productsjsondata = '{{products | tojson}}'
+    var aproductsjsondata = '{{aproducts | tojson}}'
+    var defpair = '{{ipair}}'
+    var deftime = '{{itime}}'
+    </script>
+
+</head>
+
+<body>
+
+    <div class="headers">
+        <h1>Crypto Cracker</h1>
+        <h3>fast crypto price predictions</h3>
+    </div>
+
+    <div class="description">
+        <p>Below, you are provided a selection of cryptocurrency trading pairs.</p>
+        <p>The tool predicts where the price is headed and what the EMA(14) is after a candle of your choosing has closed.</p>
+    </div>
+
+    <div class="container">
+        <form id="currency-pair-selection" name="currency-pair-selection" class="currency-pair-selection" action="{{ url_for('index')}}" method="POST">
+            <span class="pairselect">
+            <label for="currency-pairs">Choose a currency pair:</label>
+            <script type="text/javascript" src={{ url_for('static', filename="js/script.js") }}></script>
+            </span>
+            
+            <span class="timeselect">
+            <label for="time" class="timelabel">Pick candle time:</label>
+            <script type="text/javascript" src={{ url_for('static', filename="js/script2.js") }}></script>
+            </span>
+            <div><input type="submit" name="run" class="button" value="RUN"></div>
+        </form>
+    </div>
+
+    <div class="error-message">
+        <p id="pair-error" style="visibility: hidden;">Please select a currency pair.</p>
+    </div>
+
+    <div class="disclaimer">
+        <p>Crypto Cracker was developed as a course project by three science students from the University of Helsinki.</p>
+        <p>The prediction algorithm uses historical data from Coinbase Pro API.</p>
+    </div>
+
+    <script>
+        var node;
+        var pair = '{{bpair}}'
+        if(pair=="true")   {
+            node = document.getElementById('pair-error');
+            node.style.visibility = 'visible'
+        }
+    </script>
+
+</body>
+
+</html>
